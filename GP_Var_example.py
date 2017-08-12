@@ -19,7 +19,8 @@ if __name__ == "__main__":
     y = Variable(torch.LongTensor(y))
 
     # 2. LOAD MODEL
-    gp = GP_Var(n_outputs=2, kernel="rbf")
+    gp = GP_Var(n_outputs=2, kernel="rbf", n_inducing=50)
 
     # 3. OPTIMIZE PARAMETERS
-    gp.fit(X, y, verbose=1, lr=1e-4, epochs=100)
+    gp.fit(X, y, verbose=1, lr=1., epochs=1000)
+

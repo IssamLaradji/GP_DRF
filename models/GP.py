@@ -57,8 +57,8 @@ class GP(nn.Module):
         Knn = (self.K(X, X, self.rbf_scale_length) + 
               torch.exp(self.noise).expand(N,N) * Variable(torch.eye(N)))
         
-        A = - 0.5 * 2. *  ut.Cholesky()(Knn).diag().log().sum()
-        B = - 0.5 * y_diff.dot(torch.mv(ut.Inverse()(Knn), y_diff))
+        A = - 0.5 * ut.determinent(Knn)
+        B = - 0.5 * y_diff.dot(torch.mv(Knn.inverse(), y_diff))
         C = - 0.5 * N * np.log(2 * np.pi)
 
         neg_logp =  - (A + B + C)

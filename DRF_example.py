@@ -24,5 +24,5 @@ if __name__ == "__main__":
              n_rff=500, df=50, n_layers=2)
 
     # 3. OPTIMIZE PARAMETERS
-    drf.fit(X, y, verbose=1, lr=1e-1, epochs=1000)   
+    drf.fit(X, y, verbose=1, lr=1e-1, epochs=800)   
  

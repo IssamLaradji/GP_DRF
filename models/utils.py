@@ -53,46 +53,60 @@ class Cholesky(torch.autograd.Function):
             
         return s
 
-class Inverse(torch.autograd.Function):
+def log_determinent(M):
+    return 2. * Cholesky()(M).diag().log().sum()
 
-    def forward(self, input):
-        inverse = torch.inverse(input)
-        self.save_for_backward(inverse)
-        return inverse
+def KL_diagLog(mean, mean_prior, logsigma, logsigma_prior):
+    # https://tgmstat.wordpress.com/2013/07/10/kullback-leibler-divergence/
+    mu = mean_prior.view(-1)
+    mu_pr = mean.view(-1)
 
+    logSig = logsigma.view(-1)
+    logSig_prior = logsigma_prior.view(-1)
 
-    def backward(self, grad_output):
-        input, = self.saved_tensors
-        return -torch.mm(input.t(), torch.mm(grad_output, input.t()))
+    A = logSig_prior - logSig
+    B = torch.pow(mu - mu_pr, 2)  / torch.exp(logSig_prior)
+    C = torch.exp(logSig - logSig_prior) - 1
 
+    return 0.5 * torch.sum(A + B + C)
 
+def KL_diagSqrt(mean, mean_prior, sqrtsigma, sqrtsigma_prior):
+    # https://tgmstat.wordpress.com/2013/07/10/kullback-leibler-divergence/
+    # https://github.com/GPflow/GPflow/blob/master/GPflow/kullback_leiblers.py
 
-class MyReLU(torch.autograd.Function):
-    """
-    We can implement our own custom autograd Functions by subclassing
-    torch.autograd.Function and implementing the forward and backward passes
-    which operate on Tensors.
-    """
+    N = mean.size(0)
+    sigma_prior_inv = torch.diag(sqrtsigma_prior).inverse()
+    # Prior log-det term.
+    A = log_determinent(torch.diag(sqrtsigma_prior**2))
 
-    def forward(self, input):
-        """
-        In the forward pass we receive a Tensor containing the input and return a
-        Tensor containing the output. You can cache arbitrary Tensors for use in the
-        backward pass using the save_for_backward method.
-        """
-        self.save_for_backward(input)
-        return input.clamp(min=0)
+    # Post log-det term
+    B = - torch.sum(torch.log(sqrtsigma**2))
 
-    def backward(self, grad_output):
-        """
-        In the backward pass we receive a Tensor containing the gradient of the loss
-        with respect to the output, and we need to compute the gradient of the loss
-        with respect to the input.
-        """
-        input, = self.saved_tensors
-        grad_input = grad_output.clone()
-        grad_input[input < 0] = 0
-        return grad_input
+    # Mahalanobis term.
+    mu_diff = (mean_prior - mean)
+    C = torch.sum(sigma_prior_inv.mv(mu_diff)**2)
+
+    # Trace Term
+    D = torch.dot(torch.diag(sigma_prior_inv), sqrtsigma**2)
+
+    return 0.5 * (A + B + C + D - N)
+
+# def KL_full(mean, mean_prior, sqrtsigma, sqrtsigma_prior):
+#     # https://tgmstat.wordpress.com/2013/07/10/kullback-leibler-divergence/
+#     # https://github.com/GPflow/GPflow/blob/master/GPflow/kullback_leiblers.py
+    
+#     N = mean.size(0)
+#     sigma_prior_inv = sqrtsigma_prior.inverse()
+#     import pdb; pdb.set_trace()  # breakpoint 7915e892 //
+
+#     A = log_determinent(sqrtsigma_prior) - log_determinent(sigma))
+#     B = torch.trace(sigma_prior_inv.mm(sigma))
+
+#     mu_diff = (mean_prior - mean)
+#     C = mu_diff.dot(sigma_prior_inv.mv(mu_diff))
+
+#     return 0.5 * A + B + C - N
+
 
 def numpy2var(x):
     return torch.autograd.Variable(torch.FloatTensor(x))

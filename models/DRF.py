@@ -38,16 +38,31 @@ class DRF(nn.Module):
         self.theta_loglength = Variable(torch.ones(self.n_layers).type(dtype),
                                requires_grad=False)
         
+        self.W_mean_prior = [Variable(torch.zeros(self.dhat_in[i], self.dhat_out[i]), 
+                      requires_grad=False) for i in range(self.n_layers)]
+
         self.W_mean= [Variable(torch.zeros(self.dhat_in[i], self.dhat_out[i]), 
                       requires_grad=True) for i in range(self.n_layers)]
 
+        self.W_logsigma_prior = [Variable(torch.zeros(self.dhat_in[i], self.dhat_out[i]), 
+                      requires_grad=False) for i in range(self.n_layers)]
+
+
         self.W_logsigma = [Variable(torch.zeros(self.dhat_in[i], self.dhat_out[i]), 
                            requires_grad=True) for i in range(self.n_layers)]
-        
+
+        self.Omega_mean_prior = [Variable(torch.zeros(self.d_in[i], self.d_out[i]), 
+                      requires_grad=False) for i in range(self.n_layers)]
+
+
         self.Omega_mean= [Variable(torch.zeros(self.d_in[i], self.d_out[i]), 
                           requires_grad=False)  for i in range(self.n_layers)]
 
-        self.Omega_logsigma = [self.theta_loglength[i].expand(self.d_in[i],                   self.d_out[i]) * Variable(torch.ones(self.d_in[i                      ], self.d_out[i]), requires_grad=False) for i                    in range(self.n_layers)]
+        self.Omega_logsigma_prior = [self.theta_loglength[i].expand(self.d_in[i], self.d_out[i]) * Variable(-2. * torch.ones(self.d_in[i], self.d_out[i]), requires_grad=False) for i in range(self.n_layers)]
+
+
+        self.Omega_logsigma = [Variable(
+                               self.Omega_logsigma_prior[i].data.clone(), requires_grad=True) for i in range(self.n_layers)]
    
         self.Omega_eps = [Variable(torch.randn(self.d_in[i], self.d_out[i]), 
                           requires_grad=False)  for i in range(self.n_layers)]
@@ -55,19 +70,6 @@ class DRF(nn.Module):
         self.W_eps = [Variable(torch.randn(self.dhat_in[i], self.dhat_out[i]), 
                           requires_grad=False)  for i in range(self.n_layers)]       
     def forward(self, x):
-        # SAMPLE FOR OMEGA - Reparametrization (Section 3.3 in [1])
-        Omega_approx = []
-        for i in range(self.n_layers):
-            eps = Variable(torch.randn(self.d_in[i], self.d_out[i]))
-            Omega_approx += [self.Omega_mean[i] + 
-                             torch.exp(self.Omega_logsigma[i] / 2) * 
-                             self.Omega_eps[i]]
-        # SAMPLE FOR W - Reparametrization (Equation 12 in [1])
-        W_approx = []
-        for i in range(self.n_layers):
-            eps = Variable(torch.randn(self.dhat_in[i], self.dhat_out[i]))
-            W_approx += [self.W_mean[i] + torch.exp(self.W_logsigma[i] / 2)
-                         * self.W_eps[i]]
         F = x
         N = x.size(0)
         for i in range(self.n_layers):
@@ -75,8 +77,13 @@ class DRF(nn.Module):
 
             # TODO: FeedForward Approach - add X input at each hiden layer
             
+            # OMEGA - Reparametrization (Section 3.3 in [1])
+            Omega_approx = (self.Omega_mean[i] + 
+                            torch.exp(self.Omega_logsigma[i] / 2.) * 
+                            self.Omega_eps[i])
+
             # Equation 6 in [1]
-            phi_half = torch.mm(F, Omega_approx[i])
+            phi_half = torch.mm(F, Omega_approx)
 
             phi = torch.exp(0.5 * self.theta_logsigma[i]).expand(N, N_rf)
             phi = phi / np.sqrt(1. * N_rf)
@@ -86,8 +93,13 @@ class DRF(nn.Module):
 
             phi = torch.cat([A,B], 1)
 
+            # W - Reparametrization (Equation 12 in [1])
+            W_approx = (self.W_mean[i] + 
+                        torch.exp(self.W_logsigma[i] / 2.) * 
+                        self.W_eps[i])
+
             # First line under Equation 6 in [1]
-            F = torch.mm(phi, W_approx[i])
+            F = torch.mm(phi, W_approx)
 
         return F 
         
@@ -98,7 +110,16 @@ class DRF(nn.Module):
         y_logprob = nn.LogSoftmax()(F)
         loss = nn.NLLLoss()(y_logprob, y)
 
-        # TODO: ADD KLL regularization on the parameters
+        # ADD KLL regularization on the parameters
+        for i in range(self.n_layers):
+            # REGULARIZE W with KLL            
+            loss += 0.001 * ut.KL_diagLog(self.W_mean[i],  self.W_mean_prior[i], self.W_logsigma[i], self.W_logsigma_prior[i])
+            #
+
+            # REGULARIZE Omega with KLL
+            loss += 0.001 * ut.KL_diagLog(self.Omega_mean[i],  self.Omega_mean_prior[i], 
+                        self.Omega_logsigma[i], 
+                        self.Omega_logsigma_prior[i])
 
         return loss, torch.exp(y_logprob)
 
