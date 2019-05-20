@@ -1,8 +1,7 @@
-# GP_DRF - IJCNN 2019  
+# Efficient Deep Gaussian Process Models for Variable-Sized Inputs - IJCNN 2019  
 [[Paper](https://arxiv.org/abs/1905.06982)]
 
-## Efficient Deep Gaussian Process Models for Variable-Sized Inputs
-
+## Overview
 Our proposed method combines Gaussian Processes with deep random feature expansion. 
 
 ## Requirements
