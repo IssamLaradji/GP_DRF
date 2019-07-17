@@ -29,9 +29,11 @@ python GP_DRF_example.py
 ## Citation
 If you find this useful, please consider citing us!
 
+```
 @article{laradji2019efficient,
   title={Efficient Deep Gaussian Process Models for Variable-Sized Input},
   author={Laradji, Issam H and Schmidt, Mark and Pavlovic, Vladimir and Kim, Minyoung},
   journal={arXiv preprint arXiv:1905.06982},
   year={2019}
 }
+```
